@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIonOS × CTM Servicing Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, precise, premium enterprise product; few hues, lots of air
+   IDEA: a real CTM servicing desk where an agent quietly does the work, narrated like a keynote demo
+   PICTURE: the app itself, plus one trip timeline that shows the missed meeting and the fix
+   COLOUR and TYPE: AIonOS navy #1C2453 and signal blue #2148FB on white; Outfit for titles, Inter for UI, JetBrains Mono for PNRs
+   LAYOUT: navy top bar with stage stepper, app window centre, caption bar with progress at the foot */
+:root{color-scheme:light dark;
+--navy:#1C2453;--blue:#2148FB;--blue2:#5B78FC;--mist:#ECEFFE;
+--bg:light-dark(#F3F5FB,#0B1029);--card:light-dark(#FFFFFF,#151B3E);--ink:light-dark(#151A3C,#E8EBFA);
+--muted:light-dark(#5B6286,#9DA5CB);--line:light-dark(#E3E6F2,#283062);--soft:light-dark(#F2F4FC,#1B2249);
+--tint:light-dark(#ECEFFE,#1E2A6B);--red:#E5484D;--redt:light-dark(#FDECEC,#3A1A26);--amber:#B77900;--ambert:light-dark(#FFF5DE,#3A2E12);
+--green:#13955D;--greent:light-dark(#E5F6EE,#123428);--violet:#7357E8;--violett:light-dark(#F0ECFF,#2A2154);--teal:#0B8E9B;--tealt:light-dark(#E3F6F8,#0F3238);
+--shadow:0 1px 2px rgba(20,26,60,.06),0 12px 32px -12px rgba(20,26,60,.18)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow:hidden;display:grid;grid-template-rows:60px minmax(0,1fr) auto}
+.noanim *{transition:none!important;animation:none!important}
+button{font:inherit;cursor:pointer;color:inherit}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue2);outline-offset:2px}
+h1,h2,h3{font-family:Outfit,Inter,sans-serif;font-weight:500;margin:0;text-wrap:balance}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+/* top bar */
+.top{background:var(--navy);color:#fff;display:flex;align-items:center;gap:16px;padding:0 16px}
+.brand{font-family:Outfit;font-size:19px;font-weight:600;white-space:nowrap;letter-spacing:.2px}
+.brand span{font-weight:300;opacity:.75}
+.stepper{flex:1;display:flex;justify-content:center;gap:4px;overflow:hidden}
+.stg{background:none;border:0;color:#AEB5DA;padding:7px 12px;border-radius:999px;font-size:13.5px;display:flex;align-items:center;gap:7px;white-space:nowrap;min-height:36px}
+.stg i{width:8px;height:8px;border-radius:50%;background:#4A5394;flex:none;transition:.3s}
+.stg.done i{background:var(--blue2)}.stg.on{background:rgba(255,255,255,.1);color:#fff}.stg.on i{background:#fff;box-shadow:0 0 0 4px rgba(91,120,252,.45)}
+.ctrls{display:flex;gap:6px}
+.cb{width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);display:grid;place-items:center;color:#fff}
+.cb:hover{background:rgba(255,255,255,.14)}.cb svg{width:18px;height:18px}.cb.off{opacity:.45}
+.cb.play{background:var(--blue);border-color:var(--blue)}
+/* stage */
+main{position:relative;overflow:hidden;padding:18px clamp(12px,2vw,28px)}
+.app{position:absolute;inset:18px clamp(12px,2vw,28px);background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);display:grid;grid-template-rows:52px minmax(0,1fr);overflow:hidden;transition:opacity .5s,transform .5s}
+.app.hide{opacity:0;transform:scale(.985);pointer-events:none}
+.abar{display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid var(--line)}
+.abar b{font-family:Outfit;font-weight:600;font-size:16px}
+.pill{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--tint);color:var(--blue);font-weight:600;white-space:nowrap}
+.abar .sp{flex:1}
+.who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;color:#fff;background:var(--slate,#4A5175);flex:none}
+.abody{position:relative;overflow:hidden}
+.view{position:absolute;inset:0;overflow:auto;padding:18px;opacity:0;transform:translateY(10px);transition:opacity .45s,transform .45s;pointer-events:none}
+.view.on{opacity:1;transform:none;pointer-events:auto}
+.full{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .6s;background:var(--navy);color:#fff;overflow:auto}
+.full.on{opacity:1;pointer-events:auto}
+/* cards & common */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.ct{font-family:Outfit;font-size:15px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.ct small{font-family:Inter;font-weight:400;color:var(--muted);font-size:12.5px;margin-left:auto}
+.lbl{font-size:12.5px;color:var(--muted)}
+.rise{opacity:0;transform:translateY(8px);transition:opacity .45s,transform .45s}
+.rise.in{opacity:1;transform:none}
+.chip{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.c-chg{background:var(--tint);color:var(--blue)}.c-pay{background:var(--ambert);color:var(--amber)}.c-fin{background:var(--violett);color:var(--violet)}.c-kb{background:var(--tealt);color:var(--teal)}.c-none{background:var(--soft);color:var(--muted)}
+.p-Urgent{background:var(--red);color:#fff}.p-High{background:var(--ambert);color:var(--amber)}.p-Normal{background:var(--soft);color:var(--ink)}.p-Low{background:var(--soft);color:var(--muted)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .c-chg{color:#9FB2FF}}
+:root[data-theme=dark] .c-chg{color:#9FB2FF}
+/* triage */
+.tri{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;min-height:100%}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--soft);border-radius:12px;padding:10px 14px}
+.stat b{display:block;font-family:Outfit;font-size:28px;font-weight:500;line-height:1.1}
+.stat.hl{background:var(--blue);color:#fff}.stat.hl .lbl{color:#DCE3FF}
+.list{position:relative}
+.mail{position:absolute;left:0;right:0;height:58px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;align-items:center;padding:0 12px;border-radius:10px;border:1px solid transparent;transition:transform .7s cubic-bezier(.2,.8,.2,1),opacity .5s,background .4s,border-color .4s}
+.mail:hover{background:var(--soft)}
+.mail .t1{display:flex;gap:8px;align-items:baseline;font-size:14px}.mail .t1 b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mail .t1 time{margin-left:auto;color:var(--muted);font-size:12px;flex:none}
+.mail .t2{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mail .t2 em{font-style:normal;color:var(--ink)}
+.mail .tags{display:flex;gap:6px;align-items:center}
+.mail .tags .chip{opacity:0;transform:scale(.8);transition:.35s}
+.mail.tagged .tags .ci,.mail.ranked .tags .cp{opacity:1;transform:none}
+.mail.scan{background:var(--tint)}
+.mail.muted{opacity:.45}.mail.gone{opacity:0}
+.mail.top1{border-color:var(--red);background:var(--redt)}
+.mergetag{display:none;font-size:11.5px;color:var(--muted)}.mail.hasmerge .mergetag{display:inline}
+.grp{position:absolute;left:12px;right:12px;height:30px;display:flex;align-items:center;font-size:12.5px;color:var(--muted);border-top:1px dashed var(--line);opacity:0;transition:opacity .5s,transform .7s}
+.grp.in{opacity:1}
+.log{display:flex;flex-direction:column;gap:8px}
+.li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;font-size:13px;opacity:0;transform:translateX(8px);transition:.4s}
+.li.in{opacity:1;transform:none}
+.ok{width:18px;height:18px;border-radius:50%;background:var(--greent);color:var(--green);display:grid;place-items:center;font-size:11px;font-weight:700;margin-top:1px}
+.ok.run{background:none;border:2px solid var(--tint);border-top-color:var(--blue);animation:spin .8s linear infinite;color:transparent}
+.ok.warn{background:var(--ambert);color:var(--amber)}.ok.bad{background:var(--redt);color:var(--red)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.li small{display:block;color:var(--muted);font-size:12px}
+.agent-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.orb{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#8EA4FF,var(--blue) 60%,#1530B8);box-shadow:0 0 0 0 rgba(33,72,251,.4);animation:pulse 2.4s infinite;flex:none}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(33,72,251,0)}100%{box-shadow:0 0 0 0 rgba(33,72,251,0)}}
+/* case */
+.case{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+.col{display:flex;flex-direction:column;gap:16px}
+.em h3{font-size:17px;line-height:1.3;margin:6px 0 10px}
+.em p{margin:0 0 9px;font-size:14px}
+.em .from{display:flex;gap:10px;align-items:center;font-size:13px}
+mark{background:light-dark(#FFF0B8,#5A4A12);color:inherit;border-radius:3px;padding:0 2px;transition:background .6s}
+mark.off{background:transparent}
+.pnr{background:#0F1533;color:#CFD6FF;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;overflow-x:auto;white-space:pre;min-height:170px}
+.pnr span{display:block;opacity:0;transition:opacity .25s}.pnr span.in{opacity:1}
+.pnr .x{color:#FF8A8E}.pnr .k{color:#9FE3B8}.pnr .h{color:#8D96C7}
+.fig{position:relative;height:240px}.fig>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.tl-bar{transition:opacity .5s}
+.callout{display:flex;gap:10px;align-items:flex-start;background:var(--redt);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.callout b{color:var(--red)}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0}
+.rule{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:start;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;opacity:.25;transition:opacity .4s}
+.rule:first-of-type{border-top:0}.rule.in{opacity:1}
+.rule .r{font-size:12px;font-weight:600;white-space:nowrap}
+/* decide */
+.dec{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.opt{position:relative;border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--card);transition:opacity .5s,transform .5s,border-color .4s,box-shadow .4s}
+.opt.best{border:2px solid var(--blue);box-shadow:0 10px 30px -14px rgba(33,72,251,.55)}
+.opt .rk{position:absolute;top:-11px;left:14px;font-size:11.5px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--blue);color:#fff}
+.opt .rk.g{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+.opt h3{font-size:20px;display:flex;align-items:baseline;gap:8px}.opt h3 small{font-family:Inter;font-size:12.5px;color:var(--muted);font-weight:400}
+.times{display:flex;align-items:center;gap:10px;margin:8px 0 12px;font-family:Outfit;font-size:22px;white-space:nowrap}
+.times i{flex:1;height:1px;background:var(--line);position:relative;min-width:20px}
+.times i::after{content:"";position:absolute;right:0;top:-3px;border:3.5px solid transparent;border-left:6px solid var(--muted)}
+.times small{display:block;font-family:Inter;font-size:11.5px;color:var(--muted)}
+.facts{display:grid;gap:6px;font-size:13px}
+.facts div{display:flex;justify-content:space-between;gap:10px}.facts span:first-child{color:var(--muted)}
+.facts .g{color:var(--green);font-weight:600}.facts .a{color:var(--amber);font-weight:600}
+.why{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.approve{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-radius:14px;padding:14px 16px;background:var(--soft)}
+.approve .txt{flex:1;min-width:220px;font-size:14px}
+.btn{min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:14px;white-space:nowrap}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:#1638D8}
+.btn.done{background:var(--green);border-color:var(--green)}
+/* execute */
+.exe{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.task{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;padding:10px 0;border-top:1px solid var(--line);opacity:.3;transition:opacity .4s}
+.task:first-of-type{border-top:0}.task.in{opacity:1}
+.task b{font-weight:600;font-size:14px}.task small{display:block;color:var(--muted);font-size:12.5px}
+.term{background:#0F1533;color:#B9C3F5;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;min-height:120px;white-space:pre-wrap}
+.term .p{color:#6E7BC4}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab{min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:none;font-size:13px}
+.tab.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.msg{font-size:14px;line-height:1.6}.msg p{margin:0 0 10px}
+.wa{max-width:360px;background:light-dark(#E7F8E9,#173A24);border-radius:12px 12px 12px 4px;padding:10px 12px;font-size:14px;line-height:1.5}
+.wa small{display:block;text-align:right;color:var(--muted);font-size:11px}
+.flight{display:grid;grid-template-columns:repeat(3,auto);justify-content:start;gap:4px 22px;background:var(--soft);border-radius:10px;padding:10px 14px;margin:6px 0 12px;font-size:13px}
+.flight b{font-family:Outfit;font-size:16px;font-weight:600}
+/* audit */
+.aud{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px}
+.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.tile{background:var(--soft);border-radius:12px;padding:10px 14px}.tile b{display:block;font-family:Outfit;font-size:24px;font-weight:500;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.tm{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--muted)}
+tbody tr{opacity:0;transition:opacity .35s}tbody tr.in{opacity:1}
+tr.human td{background:var(--greent)}
+.act{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--blue);flex:none}.human .dot{background:var(--green)}
+.pass dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;font-size:13px;margin:0}.pass dt{color:var(--muted)}.pass dd{margin:0;text-align:right}
+.rb{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.rbnote{font-size:12.5px;color:var(--muted);margin-top:10px;min-height:18px}
+/* intro & impact */
+.hero{min-height:100%;display:grid;align-content:center;gap:28px;padding:clamp(24px,5vw,64px) clamp(20px,6vw,90px);max-width:1240px;margin:0 auto}
+.hero h1{font-size:clamp(34px,4.6vw,56px);line-height:1.05;font-weight:400;max-width:15ch}
+.hero p.lead{font-size:18px;color:#C5CBEA;max-width:58ch;margin:0}
+.eyb{color:#9FB0FF;font-size:14px}
+.flow{display:grid;grid-template-columns:repeat(5,auto);align-items:center;justify-content:start;gap:14px}
+.node{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 18px;transition:.5s}
+.node svg{width:26px;height:26px;flex:none}
+.node b{display:block;font-family:Outfit;font-weight:500;font-size:17px}.node small{color:#AEB5DA;font-size:12.5px}
+.node.lit{background:var(--blue);border-color:var(--blue2);box-shadow:0 12px 40px -10px rgba(33,72,251,.8)}
+.wire{width:52px;height:2px;background:rgba(255,255,255,.18);position:relative;overflow:hidden}
+.wire::after{content:"";position:absolute;inset:0;background:var(--blue2);transform:translateX(-100%);transition:transform .8s}
+.wire.lit::after{transform:none}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.btn.big{min-height:52px;padding:0 24px;font-size:16px;border-radius:12px}
+.btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.3)}
+.fine{font-size:13px;color:#9098C4}
+.imp{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:clamp(20px,4vw,56px);align-items:start}
+.cmp{display:grid;gap:18px;margin-top:8px}
+.cmp .row{display:grid;gap:6px}.cmp .row div:first-child{display:flex;justify-content:space-between;font-size:14px;color:#C5CBEA}
+.cmp .row b{font-family:Outfit;font-size:26px;font-weight:500;color:#fff}
+.track{height:14px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.fill{height:100%;width:0;border-radius:999px;background:#7C86B8;transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+.fill.b{background:linear-gradient(90deg,var(--blue),var(--blue2))}
+.proof{display:grid;gap:12px}
+.pc{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:16px 18px}
+.pc b{font-family:Outfit;font-size:34px;font-weight:500;display:block;line-height:1.1}
+.pc span{color:#C5CBEA;font-size:14px}
+.pains{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.pains span{font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.2);color:#C5CBEA}
+.pains span.y{background:rgba(91,120,252,.22);border-color:var(--blue2);color:#fff}
+.closecard{background:#fff;color:var(--navy);border-radius:16px;padding:20px 22px}
+.closecard h2{font-size:26px;line-height:1.15;margin-bottom:6px}
+.closecard p{margin:0;color:#4A5175}
+/* caption bar */
+.cap{background:var(--card);border-top:1px solid var(--line);position:relative;padding:14px clamp(14px,2vw,28px);display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center;min-height:78px}
+.cap.hidecap .ctext{visibility:hidden}
+.prog{position:absolute;left:0;right:0;top:-1px;height:3px;background:var(--line)}
+.prog i{position:absolute;left:0;top:0;bottom:0;background:var(--blue);transition:width .25s linear}
+.sn{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.ctext{font-size:16px;line-height:1.5;max-width:110ch;transition:opacity .3s}
+.wave{display:flex;gap:3px;align-items:center;height:22px}
+.wave i{width:3px;border-radius:2px;background:var(--blue);height:6px}
+.speaking .wave i{animation:wv 1s ease-in-out infinite}
+.wave i:nth-child(2){animation-delay:.15s}.wave i:nth-child(3){animation-delay:.3s}.wave i:nth-child(4){animation-delay:.45s}
+@keyframes wv{50%{height:20px}}
+.note{font-size:12px;color:var(--muted);white-space:nowrap}
+/* cursor */
+.cur{position:fixed;left:0;top:0;width:22px;height:22px;z-index:50;pointer-events:none;opacity:0;transition:transform 1s cubic-bezier(.3,.7,.2,1),opacity .3s}
+.cur.on{opacity:1}
+.cur::after{content:"";position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:rgba(33,72,251,.35);transform:scale(0);opacity:0}
+.cur.click::after{animation:rip .6s}
+@keyframes rip{0%{transform:scale(.2);opacity:1}100%{transform:scale(1.8);opacity:0}}
+@media (max-width:1100px){.case{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.case .col:last-child{grid-column:1/-1}.tri,.aud{grid-template-columns:minmax(0,1fr)}.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:900px){.stg span{display:none}.stg{padding:7px 9px}.opts,.exe,.imp{grid-template-columns:minmax(0,1fr)}.who span{display:none}.note{display:none}.cap{grid-template-columns:minmax(0,1fr) auto}.sn{display:none}}
+@media (max-width:640px){body{overflow:auto;height:auto;min-height:100%;grid-template-rows:auto minmax(640px,1fr) auto}.top{flex-wrap:wrap;padding:10px 12px}.stepper{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto}.case{grid-template-columns:minmax(0,1fr)}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.mail .t2,.mail .cp,.mail .mergetag,.mail .t1 time{display:none!important}.em .from{flex-wrap:wrap}.flow{grid-template-columns:minmax(0,1fr)}.wire{width:2px;height:22px;margin-left:30px}.ctext{font-size:15px}.abar .pill{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">AIonOS <span>× CTM</span></div>
+  <nav class="stepper" id="stepper" aria-label="Demo stages"></nav>
+  <div class="ctrls">
+    <button class="cb" id="bPrev" aria-label="Previous step" title="Previous (←)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button class="cb play" id="bPlay" aria-label="Play" title="Play / pause (space)"><svg viewBox="0 0 24 24" fill="currentColor" id="icPlay"><path d="M8 5v14l11-7z"/></svg></button>
+    <button class="cb" id="bNext" aria-label="Next step" title="Next (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="cb" id="bVoice" aria-label="Voice on" title="Voice (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="vw" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg></button>
+    <button class="cb" id="bCap" aria-label="Captions on" title="Captions (C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 10.5a2 2 0 10 0 3M17 10.5a2 2 0 10 0 3"/></svg></button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- INTRO -->
+  <section class="full on" id="v-intro">
+    <div class="hero">
+      <div class="eyb">Demo prepared for CTM · Changes, exchanges and disruption handling</div>
+      <h1>From inbox to reissued ticket, with a consultant in control</h1>
+      <p class="lead">Follow one Qantas schedule change through the AIonOS servicing agent: email triage, fare rules, travel policy, one-click approval, reissue on Amadeus and a full audit trail.</p>
+      <div class="flow" id="flow">
+        <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><div><b>Triage</b><small>12 emails, read and ranked</small></div></div>
+        <div class="wire"></div>
+        <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><div><b>Decide</b><small>Fare rules and policy applied</small></div></div>
+        <div class="wire"></div>
+        <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><div><b>Execute and assure</b><small>Reissued, replied, logged</small></div></div>
+      </div>
+      <div class="cta" id="cta">
+        <button class="btn pri big" id="bStart">Start narrated demo</button>
+        <button class="btn big ghost" id="bSelf">Explore at my own pace</button>
+      </div>
+      <div class="fine">About 4 minutes with narration. Use ← → to step, space to pause. Illustrative data: traveller, client and booking details are fictional.</div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section class="app hide" id="app">
+    <div class="abar">
+      <b>CTM Servicing Desk</b><span class="pill">AIonOS agent active</span><span class="sp"></span>
+      <div class="who"><span>Olivia M. · Consultant, Sydney</span><div class="av" style="background:#7357E8">OM</div></div>
+    </div>
+    <div class="abody">
+      <div class="view" id="v-triage"></div>
+      <div class="view" id="v-case"></div>
+      <div class="view" id="v-decide"></div>
+      <div class="view" id="v-execute"></div>
+      <div class="view" id="v-audit"></div>
+    </div>
+  </section>
+
+  <!-- IMPACT -->
+  <section class="full" id="v-impact"></section>
+</main>
+
+<footer class="cap" id="cap">
+  <div class="prog"><i id="progAll"></i></div>
+  <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="ctext" id="ctext" aria-live="polite">Press Start to begin the narrated demo.</div>
+  <div><div class="sn" id="sn"></div><div class="note">Illustrative data</div></div>
+</footer>
+<div class="cur" id="cur"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9-6.5 1.5L16 20l-3 1.5-3.4-7.4L4 18z" fill="#fff" stroke="#1C2453" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+
+<script>
+{
+const STEPS=[{"id": "s0", "scene": "intro", "dur": 19.75, "text": "Welcome. This is the AIonOS servicing agent, running on a typical CTM servicing desk. Over the next few minutes, we'll follow one everyday problem, an airline schedule change, from the moment it lands in the inbox to a reissued ticket. With a consultant in control at every decision."}, {"id": "s1", "scene": "triage", "dur": 11.19, "text": "It's early on Thursday morning, and the shared servicing inbox has filled up overnight. Before a consultant opens a single email, the agent has already read every one of them."}, {"id": "s2", "scene": "triage", "dur": 15.84, "text": "Each message is classified by intent. Schedule changes. Exchanges. A refund enquiry. A virtual card decline from a hotel. And a handful that need no action at all: newsletters, auto-replies, and confirmations."}, {"id": "s3", "scene": "triage", "dur": 19.45, "text": "Non-actionable mail is filtered out, and a duplicate airline notification is merged into the traveller's own request. What remains is ranked by urgency, using departure time, traveller profile, and risk to the trip. Twelve emails become seven cases, and the most urgent one is at the top."}, {"id": "s4", "scene": "case", "dur": 13.78, "text": "Let's open it. Sarah Chen, a finance director at one of CTM's corporate clients, has been moved by Qantas onto tomorrow's flight. She has a nine a.m. meeting in Singapore that she will now miss."}, {"id": "s5", "scene": "case", "dur": 13.8, "text": "The agent retrieves her booking from Amadeus and reads the schedule change. Her flight this morning has been cancelled, and the airline's automatic re-protection lands her in Singapore eight hours after her meeting begins."}, {"id": "s6", "scene": "case", "dur": 14.93, "text": "Next, the fare rules. Because the airline made the change, this is an involuntary change. The agent finds the Qantas waiver, confirms that change fees don't apply, and checks which partner airlines the ticket can be endorsed to."}, {"id": "s7", "scene": "case", "dur": 13.07, "text": "Then, the client's travel policy. Qantas is the preferred carrier. Business class is allowed on flights over six hours. And any extra cost above five hundred dollars needs a manager's approval."}, {"id": "s8", "scene": "decide", "dur": 14.42, "text": "With all of that in hand, the agent searches for alternatives, and ranks three options that still get Sarah to Singapore tonight. Each one shows the arrival time, the cost, its policy status, and the reason for its ranking."}, {"id": "s9", "scene": "decide", "dur": 12.47, "text": "This is where the consultant steps in. Instead of twenty-odd minutes of reading, searching, and calculating, they review one clear recommendation, with the reasoning laid out. One click, to approve."}, {"id": "s10", "scene": "execute", "dur": 11.98, "text": "The agent then does the work. It cancels the old segment, books the new flight, reissues the ticket under the airline waiver, updates the booking record, and flags the change for invoicing."}, {"id": "s11", "scene": "execute", "dur": 7.82, "text": "It also drafts a reply to Sarah, in plain language, with her new flight and seat, ready to send by email or WhatsApp."}, {"id": "s12", "scene": "audit", "dur": 22.91, "text": "Every step is recorded in UniStack. Each action carries a timestamp, the data it used, the model behind the decision, its confidence, and its cost. The consultant's approval is captured, and the whole change can be rolled back with one click. This is how CTM can show that every automated action is transparent, explainable, and reversible."}, {"id": "s13", "scene": "impact", "dur": 20.05, "text": "The result. A case that typically takes a consultant around twenty-five minutes is resolved in under four, with a single human decision. And this isn't new for us. Our ticket reissue automation on Amadeus delivers more than ninety-three percent recommendation accuracy, with twenty-two percent faster resolutions."}, {"id": "s14", "scene": "impact", "dur": 9.64, "text": "So, pick the one flow that matters most to CTM, and we'll prove it on your own data in six to eight weeks, with no commercial commitment. Thank you."}];
+const STAGES=[["triage","Triage"],["case","Case"],["decide","Decide"],["execute","Execute"],["audit","Audit"],["impact","Impact"]];
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const MAILS=[
+{id:"m1",from:"Sarah Chen",org:"Halcyon Resources",subj:"URGENT: Qantas moved my flight, meeting in Singapore 9am tomorrow",prev:"Hi team, I just got a text from Qantas saying QF 81 today is cancelled…",time:"06:58",intent:"Schedule change",cls:"chg",pri:"Urgent",rank:1,col:"#E5484D"},
+{id:"m2",from:"Harbourview Hotel Singapore",subj:"Payment declined: virtual card for reservation HV-55821",prev:"The virtual card provided for arrival 3 Dec was declined at pre-authorisation…",time:"06:41",intent:"VCC exception",cls:"pay",pri:"High",rank:2,col:"#B77900"},
+{id:"m3",from:"Amadeus queue 8",subj:"Schedule change: PNR 7KQ2LM, QF 81 03DEC cancelled",prev:"SC notification. Segment 2 UN, replacement segment TK…",time:"06:30",intent:"Schedule change",cls:"chg",merged:1,col:"#4A5175"},
+{id:"m4",from:"James O'Neill",org:"Brightline Engineering",subj:"Can I move my Auckland return to Friday?",prev:"Meetings wrapped early, could I fly back Friday instead of Sunday…",time:"06:22",intent:"Exchange request",cls:"chg",pri:"Normal",rank:3,col:"#2148FB"},
+{id:"m5",from:"Mark Feldman",subj:"Automatic reply: Trip approval",prev:"I am out of the office until Monday 7 December…",time:"06:15",intent:"Auto-reply",cls:"none",filt:1,col:"#8A90B0"},
+{id:"m6",from:"Priya Raman",org:"Northgate Health",subj:"Refund status for my cancelled London trip",prev:"Following up on the refund for my cancelled October trip to London…",time:"05:54",intent:"Refund enquiry",cls:"fin",pri:"Normal",rank:4,col:"#7357E8"},
+{id:"m7",from:"Airline partner news",subj:"December fares and lounge updates",prev:"This month: new lounge openings and partner offers…",time:"05:30",intent:"Newsletter",cls:"none",filt:1,col:"#8A90B0"},
+{id:"m8",from:"Accounts payable",org:"Halcyon Resources",subj:"November transactions missing from invoice",prev:"Three trips from November don't appear on this month's statement…",time:"05:12",intent:"Reconciliation",cls:"fin",pri:"Normal",rank:5,col:"#7357E8"},
+{id:"m9",from:"Daniel Ruiz",org:"Brightline Engineering",subj:"Baggage allowance on my Singapore flight?",prev:"Am I allowed two checked bags on my economy fare…",time:"04:47",intent:"Policy & baggage",cls:"kb",pri:"Low",rank:6,col:"#0B8E9B"},
+{id:"m10",from:"Harbourview Hotel Singapore",subj:"Booking confirmed: HV-55907",prev:"We are pleased to confirm your reservation for 8 December…",time:"04:20",intent:"Confirmation",cls:"none",filt:1,col:"#8A90B0"},
+{id:"m11",from:"Emma Walsh",org:"Northgate Health",subj:"Do I need a visa for Japan in January?",prev:"I'm travelling to Tokyo for a conference next month…",time:"03:58",intent:"Travel advisory",cls:"kb",pri:"Low",rank:7,col:"#0B8E9B"},
+{id:"m12",from:"Events team",subj:"Webinar invitation: travel trends 2027",prev:"Join us for our quarterly travel trends webinar…",time:"02:30",intent:"Newsletter",cls:"none",filt:1,col:"#8A90B0"}];
+const ini=n=>n.split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+
+/* ---------- views ---------- */
+const V={};
+V.triage=()=>`<div class="tri"><div>
+ <div class="stats">
+  <div class="stat"><span class="lbl">Received overnight</span><b id="kR">0</b></div>
+  <div class="stat"><span class="lbl">Filtered, no action</span><b id="kF">0</b></div>
+  <div class="stat"><span class="lbl">Duplicates merged</span><b id="kM">0</b></div>
+  <div class="stat hl"><span class="lbl">Cases to work</span><b id="kC">0</b></div></div>
+ <div class="ct">Shared servicing inbox <small>servicing.anz@ · Thu 3 Dec, 07:38 AEDT</small></div>
+ <div class="list" id="list">${MAILS.map(m=>`<div class="mail rise" id="r-${m.id}"><div class="av" style="background:${m.col}">${ini(m.from)}</div>
+  <div><div class="t1"><b>${m.from}${m.org?` <span class="lbl">· ${m.org}</span>`:""}</b><time>${m.time}</time></div><div class="t2"><em>${m.subj}</em> · ${m.prev}</div></div>
+  <div class="tags"><span class="mergetag">+1 merged</span><span class="chip ci c-${m.cls}">${m.intent}</span>${m.pri?`<span class="chip cp p-${m.pri}">${m.pri}</span>`:""}</div></div>`).join("")}
+  <div class="grp" id="gF">Filtered: 4 emails need no action, filed automatically</div></div>
+</div>
+<aside class="card" style="align-self:start"><div class="agent-h"><div class="orb"></div><div><b style="font-family:Outfit;font-weight:600">Servicing agent</b><div class="lbl">Reading the inbox</div></div></div>
+ <div class="log" id="tlog"></div></aside></div>`;
+
+V.case=()=>`<div class="case">
+ <div class="col"><div class="card em rise" id="em"><div class="from"><div class="av" style="background:#E5484D">SC</div><div><b>Sarah Chen</b><div class="lbl">Finance Director, Halcyon Resources · 06:58</div></div><span class="chip p-Urgent" style="margin-left:auto">Urgent</span></div>
+  <h3>URGENT: Qantas moved my flight, meeting in Singapore 9am tomorrow</h3>
+  <p>Hi team,</p><p>I just got a text from Qantas saying <mark class="off" id="mk1">QF 81 today is cancelled</mark> and they've put me on <mark class="off" id="mk2">tomorrow's flight</mark>. I have a <mark class="off" id="mk3">board meeting in Singapore at 9am tomorrow</mark> that I can't miss.</p><p>Can you get me there tonight? Happy to fly any time today.</p><p>Thanks, Sarah</p></div>
+  <div class="card rise" id="cust"><div class="ct">Traveller profile</div><dl class="kv"><dt>Client</dt><dd>Halcyon Resources</dd><dt>Profile</dt><dd>Executive, business class eligible</dd><dt>Loyalty</dt><dd>Qantas Platinum</dd><dt>Seat</dt><dd>Window, forward cabin</dd></dl></div></div>
+ <div class="col"><div class="card rise" id="pnrc"><div class="ct">Booking 7KQ2LM <small>Amadeus · retrieved 07:38:06</small></div>
+  <div class="pnr mono" id="pnr"></div></div>
+  <div class="card rise" id="tlc"><div class="ct">Trip timeline <small>Singapore time (SGT)</small></div><div class="fig" id="tl1" style="height:150px"><svg></svg></div>
+  <div class="callout rise" id="conf"><span class="ok bad">!</span><div><b>Conflict:</b> re-protected flight lands 17:00 on 4 Dec, 8 hours after the 09:00 meeting starts.</div></div></div></div>
+ <div class="col"><div class="card"><div class="agent-h"><div class="orb"></div><div><b style="font-family:Outfit;font-weight:600">Agent reasoning</b><div class="lbl">Case CS-1042</div></div></div><div class="log" id="clog"></div></div>
+  <div class="card rise" id="fare"><div class="ct">Fare rules <small>ZOWAU1 · Business</small></div>
+   <div class="rule" id="f1"><span class="ok">✓</span><div>Change initiated by airline: involuntary</div><span class="r" style="color:var(--green)">Waiver applies</span></div>
+   <div class="rule" id="f2"><span class="ok">✓</span><div>Voluntary change fee A$450 <small class="lbl">· not charged under waiver</small></div><span class="r">A$0</span></div>
+   <div class="rule" id="f3"><span class="ok">✓</span><div>Endorsable to oneworld partners on same day</div><span class="r">QF, BA</span></div></div>
+  <div class="card rise" id="pol"><div class="ct">Halcyon travel policy</div>
+   <div class="rule" id="p1"><span class="ok">✓</span><div>Preferred carrier</div><span class="r">Qantas</span></div>
+   <div class="rule" id="p2"><span class="ok">✓</span><div>Business class on flights over 6 hours <small class="lbl">· SYD–SIN 8h 15m</small></div><span class="r">Allowed</span></div>
+   <div class="rule" id="p3"><span class="ok warn">!</span><div>Extra cost over A$500 needs manager approval</div><span class="r" style="color:var(--amber)">Rule</span></div></div></div></div>`;
+
+const OPTS=[
+ {k:"A",fl:"QF 1",cr:"Qantas · Business",d:"16:20",a:"21:35",cost:"A$0",costc:"g",costn:"same ticket, waiver",pol:"Compliant",polc:"g",seat:"3A window",why:"Preferred carrier, no extra cost, keeps her Platinum earn. Lands 11h 25m before the meeting.",best:1},
+ {k:"B",fl:"BA 16",cr:"British Airways · Business",d:"17:15",a:"22:30",cost:"A$0",costc:"g",costn:"endorsed under waiver",pol:"Compliant",polc:"g",seat:"Aisle only",why:"oneworld partner, endorsable at no cost. Later arrival and not the preferred carrier."},
+ {k:"C",fl:"SQ 222",cr:"Singapore Airlines · Business",d:"15:50",a:"21:05",cost:"+A$1,180",costc:"a",costn:"new ticket",pol:"Needs approval",polc:"a",seat:"11A window",why:"Earliest arrival, but needs a new ticket over the A$500 limit and manager approval."}];
+V.decide=()=>`<div class="dec">
+ <div class="card rise" id="tlc2"><div class="ct">Options that still make the 09:00 meeting <small>Singapore time (SGT) · departures shown in Sydney time on cards</small></div><div class="fig" id="tl2" style="height:250px"><svg></svg></div></div>
+ <div class="opts">${OPTS.map((o,i)=>`<div class="opt rise ${o.best?"best":""}" id="o${i}"><span class="rk ${o.best?"":"g"}">${o.best?"Recommended":"Option "+o.k}</span>
+  <h3>${o.fl} <small>${o.cr}</small></h3>
+  <div class="times"><div>${o.d}<small>SYD · Thu 3 Dec</small></div><i></i><div>${o.a}<small>SIN · same day</small></div></div>
+  <div class="facts"><div><span>Fare difference</span><span class="${o.costc}">${o.cost}</span></div><div><span>Basis</span><span>${o.costn}</span></div><div><span>Travel policy</span><span class="${o.polc}">${o.pol}</span></div><div><span>Seat</span><span>${o.seat}</span></div></div>
+  <div class="why">${o.why}</div></div>`).join("")}</div>
+ <div class="approve rise" id="apr"><div class="av" style="background:#7357E8">OM</div><div class="txt" id="aprTxt"><b>Consultant review.</b> Agent recommends Option A: QF 1 tonight, A$0 under the Qantas waiver, policy compliant. Confidence 94%.</div>
+  <button class="btn">Choose another</button><button class="btn">Escalate</button><button class="btn pri" id="bApprove">Approve and reissue</button></div></div>`;
+
+const TASKS=[["Cancel QF 81 · 03 Dec","Segment 2 removed, re-protected QF 81 04 Dec released","XE2,3"],["Book QF 1 · Business · 03 Dec","SYD 16:20 → SIN 21:35, confirmed HK1","SS1J1 · QF1 03DEC SYDSIN"],["Reissue ticket under waiver","081-2457739102 → 081-2457739288 · A$0 collected","FXQ/WVR-QFSC · TTP/RT"],["Assign seat 3A","Window, forward cabin, per profile","ST/3A/P1"],["Update booking record","Remarks added, schedule change queue cleared","RM*SC RESOLVED CS-1042 · QE8"],["Flag change for invoicing","Mid-office updated, A$0 change, no service fee per contract","MID-OFFICE · INV-FLAG"]];
+V.execute=()=>`<div class="exe"><div class="card"><div class="ct">Executing approved plan <small>Approved by Olivia M. · 07:40:47</small></div>
+ ${TASKS.map((t,i)=>`<div class="task" id="t${i}"><span class="ok run">✓</span><div><b>${t[0]}</b><small>${t[1]}</small></div></div>`).join("")}
+ <div class="term mono" id="term" style="margin-top:12px"></div></div>
+ <div class="card rise" id="reply"><div class="ct">Reply to Sarah <small>Drafted by agent · ready to send</small></div>
+  <div class="tabs"><button class="tab on" data-ch="mail">Email</button><button class="tab" data-ch="wa">WhatsApp</button></div>
+  <div id="chMail" class="msg"><p><b>Subject:</b> You're on QF 1 to Singapore tonight</p><p>Hi Sarah,</p><p>Qantas cancelled QF 81 this morning, so we've moved you to tonight's flight. You'll land well before your 9am meeting.</p>
+   <div class="flight"><div><span class="lbl">Flight</span><br><b>QF 1</b></div><div><span class="lbl">Sydney</span><br><b>16:20</b></div><div><span class="lbl">Singapore</span><br><b>21:35</b></div><div><span class="lbl">Cabin</span><br>Business</div><div><span class="lbl">Seat</span><br>3A window</div><div><span class="lbl">Cost to Halcyon</span><br>A$0</div></div>
+   <p>Your new e-ticket is 081-2457739288 and your hotel has been told about the later arrival. Reply here if you need anything else.</p><p>Kind regards,<br>Olivia, CTM</p></div>
+  <div id="chWa" hidden><div class="wa">Hi Sarah, it's Olivia from CTM. Qantas cancelled QF 81, so you're now on <b>QF 1 tonight</b>: SYD 16:20 → SIN 21:35, Business, seat 3A. No extra cost. New e-ticket 081-2457739288. Safe travels!<small>07:41 ✓✓</small></div></div>
+  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn pri" id="bSend">Send to Sarah</button><button class="btn">Edit</button></div><div class="rbnote" id="sendNote"></div></div></div>`;
+
+const AUD=[["07:38:02","Read 12 inbox emails","Intent classifier","98%","0.004"],["07:38:04","Classified: involuntary schedule change","Intent classifier","97%","0.001"],["07:38:04","Merged Amadeus SC notice into case","Rules engine","100%","—"],["07:38:06","Retrieved PNR 7KQ2LM","Amadeus API","—","—"],["07:38:09","Detected meeting conflict (+8h 00m)","Reasoning LLM","99%","0.006"],["07:38:12","Applied Qantas schedule-change waiver","Fare rules RAG","96%","0.009"],["07:38:14","Checked Halcyon travel policy","Policy RAG","99%","0.005"],["07:38:21","Ranked 3 options","Reasoning LLM","94%","0.018"],["07:40:47","Approved option A","Olivia M., consultant","Human","—",1],["07:40:49","Reissued ticket 081-2457739288","Amadeus API","—","—"],["07:40:52","Drafted traveller reply","Reasoning LLM","95%","0.012"],["07:41:40","Flagged change for invoicing","Mid-office API","—","—"]];
+V.audit=()=>`<div class="aud"><div>
+ <div class="ct" style="font-size:17px">UniStack · run trace for case CS-1042 <small>Every action logged, scored and costed</small></div>
+ <div class="tiles"><div class="tile"><span class="lbl">End to end</span><b>3m 38s</b></div><div class="tile"><span class="lbl">Actions</span><b>12</b></div><div class="tile"><span class="lbl">Human decisions</span><b>1</b></div><div class="tile"><span class="lbl">Avg confidence</span><b>97%</b></div><div class="tile"><span class="lbl">Model cost</span><b>A$0.06</b></div></div>
+ <div class="card" style="padding:6px 8px;overflow-x:auto"><table><thead><tr><th>Time</th><th>Action</th><th>Model or actor</th><th class="n">Confidence</th><th class="n">Cost A$</th></tr></thead>
+ <tbody>${AUD.map(r=>`<tr class="${r[5]?"human":""}"><td class="tm">${r[0]}</td><td><span class="act"><span class="dot"></span>${r[1]}</span></td><td>${r[2]}</td><td class="n">${r[3]}</td><td class="n">${r[4]}</td></tr>`).join("")}</tbody></table></div></div>
+ <aside style="display:flex;flex-direction:column;gap:16px"><div class="card pass rise" id="pass"><div class="ct">AI passport</div><dl><dt>Agent</dt><dd>Servicing agent v2.3</dd><dt>Owner</dt><dd>CTM ANZ servicing</dd><dt>Models</dt><dd>Model-agnostic, via AI gateway</dd><dt>Last evaluation</dt><dd>27 Nov 2026</dd><dt>Data stays in</dt><dd>Australia</dd><dt>Autonomy</dt><dd>Human approves changes</dd></dl></div>
+ <div class="card rise" id="rbc"><div class="ct">Reversible by design</div><div class="lbl" style="font-size:13.5px">Roll back restores the original booking and ticket, and keeps the full record.</div>
+  <div class="rb"><button class="btn" id="bReplay">Replay run</button><button class="btn" id="bRoll">Roll back change</button></div><div class="rbnote" id="rbNote"></div></div></aside></div>`;
+
+V.impact=()=>`<div class="hero"><div class="eyb">What this means for cost per transaction</div>
+ <div class="imp"><div><h1 style="max-width:18ch;margin-bottom:26px">One schedule change: about 25 minutes of work, now under 4</h1>
+  <div class="cmp"><div class="row"><div><span>Consultant handling today, typical</span><b>~25 min</b></div><div class="track"><div class="fill" id="b1"></div></div></div>
+  <div class="row"><div><span>With the AIonOS servicing agent</span><b>3m 38s</b></div><div class="track"><div class="fill b" id="b2"></div></div></div>
+  <div class="row"><div><span>Human effort</span><b>1 decision</b></div></div></div>
+  <p class="fine" style="margin-top:14px">Timings are indicative for this scenario; CTM-specific baselines are set in the proof of concept.</p></div>
+ <div class="proof"><div class="pc rise" id="pr1"><b>93%+</b><span>recommendation accuracy, with 22% faster resolutions: AIonOS ticket reissue automation for Amadeus</span></div>
+  <div class="pc rise" id="pr2"><b>30%</b><span>operational cost saving in customer operations for a leading global GDS</span></div>
+  <div class="closecard rise" id="close"><h2>Pick one flow. We'll prove it on your data in 6–8 weeks.</h2><p>No commercial commitment, measured on outcomes CTM defines.</p>
+   <div class="pains" style="margin-top:12px">${["Changes and disruption","Email triage","Consultant assist","Payment and VCC exceptions","Invoice and refund reconciliation"].map((p,i)=>`<span class="${i<3?"y":""}" style="${i<3?"color:#1C2453;background:#ECEFFE;border-color:#2148FB":"color:#4A5175;border-color:#C9CDE2"}">${i<3?"✓ ":""}${p}</span>`).join("")}</div></div></div></div></div>`;
+
+/* ---------- timeline picture ---------- */
+const T0=4,T1=44; // hours from 3 Dec 00:00 SGT
+const hh=h=>{const d=h>=24?"4 Dec ":"";const x=h%24;return d+String(Math.floor(x)).padStart(2,"0")+":"+String(Math.round((x%1)*60)).padStart(2,"0")};
+function drawTL(box,rows,show){const s=box.querySelector("svg"),W=box.clientWidth,H=box.clientHeight;if(!W)return;
+ const L=W<560?70:118,R=W<560?44:84,top=26,bot=26,X=h=>L+(h-T0)/(T1-T0)*(W-L-R),rh=Math.min(40,(H-top-bot)/rows.length);
+ const ink=getComputedStyle(document.body).color;let g="";
+ (W<560?[12,24,36]:[6,12,18,24,30,36,42]).forEach(h=>{g+=`<line x1="${X(h)}" x2="${X(h)}" y1="${top-6}" y2="${H-bot}" stroke="currentColor" stroke-opacity=".09"/><text x="${X(h)}" y="${H-8}" font-size="11" text-anchor="middle" fill="currentColor" fill-opacity=".55">${h===24?"4 Dec":(h%24)+":00"}</text>`});
+ g+=`<text x="${X(24)}" y="13" font-size="11" text-anchor="middle" fill="currentColor" fill-opacity=".55">midnight</text>`;
+ g+=`<line x1="${X(4.7)}" x2="${X(4.7)}" y1="${top-6}" y2="${H-bot}" stroke="#2148FB" stroke-dasharray="3 3"/><text x="${X(4.7)+4}" y="${top-10}" font-size="11" fill="#2148FB">now</text>`;
+ rows.forEach((r,i)=>{const y=top+i*rh+rh/2,o=show>i?1:0;
+  g+=`<g class="tl-bar" opacity="${o}"><text x="${L-10}" y="${y+4}" font-size="${W<560?11:12.5}" text-anchor="end" fill="currentColor" font-weight="${r.b?600:400}">${r.n}</text>
+  <rect x="${X(r.d)}" y="${y-8}" width="${Math.max(4,X(r.a)-X(r.d))}" height="16" rx="8" fill="${r.c}" fill-opacity="${r.x?.35:1}"/>
+  ${r.x?`<line x1="${X(r.d)}" x2="${X(r.a)}" y1="${y}" y2="${y}" stroke="${ink}" stroke-width="1.5"/>`:""}
+  <text x="${X(r.a)+6}" y="${y+4}" font-size="11.5" fill="currentColor" fill-opacity=".75">${W<560?"":"lands "}${hh(r.a)}${r.x?" · cancelled":""}</text></g>`});
+ g+=`<line x1="${X(33)}" x2="${X(33)}" y1="${top-6}" y2="${H-bot}" stroke="#E9A23B" stroke-width="2.5"/><rect x="${X(33)-48}" y="2" width="96" height="18" rx="9" fill="#E9A23B"/><text x="${X(33)}" y="15" font-size="11" text-anchor="middle" fill="#1C2453" font-weight="600">Meeting 09:00</text>`;
+ s.setAttribute("viewBox",`0 0 ${W} ${H}`);s.innerHTML=g}
+const R1=[{n:"QF 81 today",d:8.75,a:17,c:"#8A90B0",x:1},{n:"Re-protected",d:32.75,a:41,c:"#E5484D",b:1}];
+const R2=[{n:"Re-protected",d:32.75,a:41,c:"#E5484D"},{n:"A · QF 1",d:13.33,a:21.58,c:"#2148FB",b:1},{n:"B · BA 16",d:14.25,a:22.5,c:"#8EA0F0"},{n:"C · SQ 222",d:12.83,a:21.08,c:"#B9A6FF"}];
+const tl={};function tlSet(id,rows,n){tl[id]={rows,n};const b=document.getElementById(id);if(b)drawTL(b,rows,n)}
+const ro=new ResizeObserver(()=>{for(const k in tl){const b=document.getElementById(k);if(b)drawTL(b,tl[k].rows,tl[k].n)}});
+
+/* ---------- step effects ---------- */
+let INST=false,timers=[],dur=10,cur=-1,scene=null;
+function at(f,fn){if(INST){fn();return}const o={fn};o.id=setTimeout(()=>{timers=timers.filter(t=>t!==o);fn()},f*dur*1000);timers.push(o)}
+function flush(){const t=timers;timers=[];t.forEach(o=>{clearTimeout(o.id);o.fn()})}
+function clearT(){timers.forEach(o=>clearTimeout(o.id));timers=[]}
+const show=sel=>{const e=$(sel);if(!e)return;e.classList.add("in");e.scrollIntoView({block:"nearest",behavior:INST?"auto":"smooth"})};
+const add=(sel,c="in")=>{const e=typeof sel==="string"?$(sel):sel;e&&e.classList.add(c)};
+function count(id,to){const e=document.getElementById(id);if(!e)return;if(INST){e.textContent=to;return}const from=+e.textContent||0,t0=performance.now();const tick=n=>{const p=Math.min(1,(n-t0)/700);e.textContent=Math.round(from+(to-from)*p);if(p<1)requestAnimationFrame(tick)};requestAnimationFrame(tick)}
+function logTo(id,html,sub,kind=""){const l=document.getElementById(id);if(!l)return;const d=document.createElement("div");d.className="li";d.innerHTML=`<span class="ok ${kind}">${kind==="bad"||kind==="warn"?"!":"✓"}</span><div>${html}${sub?`<small>${sub}</small>`:""}</div>`;l.appendChild(d);INST?d.classList.add("in"):requestAnimationFrame(()=>requestAnimationFrame(()=>d.classList.add("in")))}
+const H=58;
+function layout(sorted){const list=$("#list");if(!list)return;let y=0;
+ if(!sorted){MAILS.forEach((m,i)=>{$("#r-"+m.id).style.transform=`translateY(${i*H}px)`});list.style.height=MAILS.length*H+"px";$("#gF").style.transform=`translateY(${MAILS.length*H}px)`;return}
+ const act=MAILS.filter(m=>m.rank).sort((a,b)=>a.rank-b.rank);
+ act.forEach(m=>{$("#r-"+m.id).style.transform=`translateY(${y}px)`;if(m.id==="m1")$("#r-m3").style.transform=`translateY(${y}px) scale(.97)`;y+=H});
+ $("#gF").style.transform=`translateY(${y+6}px)`;y+=42;
+ MAILS.filter(m=>m.filt).forEach(m=>{$("#r-"+m.id).style.transform=`translateY(${y}px)`;y+=H});list.style.height=y+"px"}
+const PNR=[["h","RP/SYDCT2100/SYDCT2100        AA/SU  02DEC26/2214Z   7KQ2LM"],["","  1.CHEN/SARAH MS"],["x","  2  QF  81 J 03DEC 4 SYDSIN UN1  1145 1700  *SC CANCELLED"],["k","  3  QF  81 J 04DEC 5 SYDSIN TK1  1145 1700  *RE-PROTECTED"],["","  4 AP SYD CTM SERVICING - A"],["","  5 TK OK02DEC/SYDCT2100"],["","  6 FA PAX 081-2457739102/ETQF/AUD4280.00/02DEC26"],["","  7 RM *POLICY HALCYON-EXEC *CC HALCYON FIN"]];
+const FX={
+s0(){const n=$$("#flow .node"),w=$$("#flow .wire");[0,1,2,3,4].forEach(i=>at(.12+i*.17,()=>{(i%2?w[(i-1)/2]:n[i/2]).classList.add("lit")}))},
+s1(){count("kR",0);MAILS.forEach((m,i)=>at(.05+i*.055,()=>add("#r-"+m.id)));at(.15,()=>logTo("tlog","Reading 12 emails","Shared ANZ servicing inbox"));at(.8,()=>{count("kR",12);logTo("tlog","Read 12 emails in 2.1 s","Body, attachments and booking references")})},
+s2(){MAILS.forEach((m,i)=>at(.05+i*.07,()=>{const r=$("#r-"+m.id);r.classList.add("tagged");r.classList.add("scan");setTimeout(()=>r.classList.remove("scan"),INST?0:500)}));at(.9,()=>logTo("tlog","Intent classified for 12 of 12","6 intents found, 4 need no action"))},
+s3(){at(.06,()=>{MAILS.filter(m=>m.filt).forEach(m=>add("#r-"+m.id,"muted"));count("kF",4);logTo("tlog","Filtered 4 non-actionable emails","Newsletters, auto-reply, confirmation filed to booking")});
+ at(.26,()=>{add("#r-m3","gone");add("#r-m1","hasmerge");count("kM",1);logTo("tlog","Merged Amadeus notice into Sarah Chen's case","Same PNR 7KQ2LM")});
+ at(.45,()=>{layout(true);add("#gF")});at(.62,()=>{MAILS.forEach(m=>add("#r-"+m.id,"ranked"));add("#r-m1","top1");count("kC",7);logTo("tlog","Ranked 7 cases by urgency","Departure time, traveller profile, trip risk")})},
+s4(){add("#em");at(.25,()=>{add("#cust");logTo("clog","Intent: involuntary schedule change","Confidence 97%")});at(.45,()=>{$("#mk1").classList.remove("off");$("#mk2").classList.remove("off")});at(.6,()=>logTo("clog","Traveller: Sarah Chen, Halcyon Resources","Executive profile, Qantas Platinum"));at(.75,()=>{$("#mk3").classList.remove("off");logTo("clog","Hard constraint: in Singapore before 09:00, 4 Dec","Taken from the email")})},
+s5(){add("#pnrc");const p=$("#pnr");PNR.forEach((l,i)=>at(.04+i*.05,()=>{const s=document.createElement("span");s.className=l[0];s.textContent=l[1]||" ";p.appendChild(s);INST?s.classList.add("in"):requestAnimationFrame(()=>s.classList.add("in"))}));
+ at(.1,()=>logTo("clog","Booking retrieved from Amadeus","PNR 7KQ2LM, ticket 081-2457739102"));at(.42,()=>{add("#tlc");tlSet("tl1",R1,1)});at(.55,()=>tlSet("tl1",R1,2));at(.7,()=>{add("#conf");logTo("clog","Re-protection misses the meeting by 8 hours","Action needed today","bad")})},
+s6(){show("#fare");["#f1","#f2","#f3"].forEach((s,i)=>at(.2+i*.22,()=>add(s)));at(.3,()=>logTo("clog","Fare rules read: Qantas waiver applies","Involuntary change, no fee"))},
+s7(){show("#pol");["#p1","#p2","#p3"].forEach((s,i)=>at(.15+i*.25,()=>add(s)));at(.85,()=>logTo("clog","Policy checked: 2 pass, 1 approval rule","Searching for alternatives"))},
+s8(){add("#tlc2");tlSet("tl2",R2,1);[1,2,3].forEach(i=>at(.15+i*.12,()=>tlSet("tl2",R2,i+1)));[0,1,2].forEach(i=>at(.45+i*.13,()=>add("#o"+i)))},
+s9(){show("#apr");at(.72,()=>{playing?clickApprove():$("#bApprove").animate([{boxShadow:"0 0 0 0 rgba(33,72,251,.6)"},{boxShadow:"0 0 0 12px rgba(33,72,251,0)"}],{duration:1200,iterations:3})})},
+s10(){TASKS.forEach((t,i)=>at(.05+i*.14,()=>{const e=$("#t"+i);e.classList.add("in");const term=$("#term");term.innerHTML+=`<span class="p">› </span>${t[2]}\n`;setTimeout(()=>{e.querySelector(".ok").classList.remove("run")},INST?0:Math.min(900,dur*120))}))},
+s11(){add("#reply")},
+s12(){$$("#v-audit tbody tr").forEach((r,i)=>at(.04+i*.045,()=>r.classList.add("in")));at(.45,()=>add("#pass"));at(.68,()=>add("#rbc"))},
+s13(){at(.1,()=>{$("#b1").style.width="100%"});at(.3,()=>{$("#b2").style.width="14.5%"});at(.55,()=>add("#pr1"));at(.75,()=>add("#pr2"))},
+s14(){add("#pr1");add("#pr2");add("#close")}};
+
+function approved(){const b=$("#bApprove");if(!b||b.classList.contains("done"))return;b.classList.add("done");b.textContent="Approved ✓";$("#aprTxt").innerHTML="<b>Approved by Olivia M. at 07:40:47.</b> The agent is reissuing on Amadeus now."}
+function clickApprove(){const b=$("#bApprove"),c=$("#cur");if(!b)return;if(INST){approved();return}
+ const r=b.getBoundingClientRect();c.style.transform=`translate(${innerWidth*.5}px,${innerHeight*.85}px)`;c.classList.add("on");
+ requestAnimationFrame(()=>requestAnimationFrame(()=>{c.style.transform=`translate(${r.left+r.width/2}px,${r.top+r.height/2}px)`}));
+ setTimeout(()=>{c.classList.remove("click");void c.offsetWidth;c.classList.add("click");approved()},1100);setTimeout(()=>c.classList.remove("on"),2000)}
+
+/* ---------- scene control ---------- */
+const appScenes=["triage","case","decide","execute","audit"];
+function showScene(sc){scene=sc;$("#v-intro").classList.toggle("on",sc==="intro");$("#v-impact").classList.toggle("on",sc==="impact");$("#app").classList.toggle("hide",!appScenes.includes(sc));
+ appScenes.forEach(s=>$("#v-"+s).classList.toggle("on",s===sc));
+ const si=STAGES.findIndex(s=>s[0]===sc);$$(".stg").forEach((b,i)=>{b.classList.toggle("on",i===si);b.classList.toggle("done",i<si)})}
+function build(sc){for(const k in tl)delete tl[k];if(sc==="intro"){$$("#flow .lit").forEach(e=>e.classList.remove("lit"));return}
+ const v=$("#v-"+sc);v.innerHTML=V[sc]();v.scrollTop=0;if(sc==="triage")layout(false);
+ v.querySelectorAll(".fig").forEach(f=>ro.observe(f));if(sc==="case")tlSet("tl1",R1,0);if(sc==="decide")tlSet("tl2",R2,0);bindScene(sc)}
+function bindScene(sc){if(sc==="decide")$("#bApprove").onclick=()=>{approved();if(cur===9){clearT();stopMedia();setTimeout(()=>go(10),900)}};
+ if(sc==="execute"){$$(".tab").forEach(t=>t.onclick=()=>{$$(".tab").forEach(x=>x.classList.toggle("on",x===t));$("#chMail").hidden=t.dataset.ch!=="mail";$("#chWa").hidden=t.dataset.ch!=="wa"});$("#bSend").onclick=()=>{$("#sendNote").textContent="Demo only: in production this sends through CTM's email or WhatsApp channel and logs to the booking."}}
+ if(sc==="audit"){$("#bRoll").onclick=()=>{$("#rbNote").textContent="Demo: roll back would restore QF 81 and ticket 081-2457739102, with a consultant confirm step."};$("#bReplay").onclick=()=>go(1)}}
+function instantly(f){INST=true;document.documentElement.classList.add("noanim");try{f()}finally{INST=false;requestAnimationFrame(()=>requestAnimationFrame(()=>document.documentElement.classList.remove("noanim")))}}
+
+let playing=false,voice=true,caps=true,started=false;const audio=new Audio();audio.preload="auto";let endT=null,progT=null,t0=0;
+function go(i){if(i<0||i>=STEPS.length)return;started=true;$("#cta").style.visibility="hidden";
+ const st=STEPS[i],sc=st.scene;stopMedia();
+ if(sc===scene&&i===cur+1)flush();else{clearT();build(sc);instantly(()=>{for(let j=STEPS.findIndex(s=>s.scene===sc);j<i;j++){dur=STEPS[j].dur;FX[STEPS[j].id]()}})}
+ cur=i;showScene(sc);dur=st.dur;FX[st.id]();
+ $("#ctext").textContent=st.text;$("#sn").textContent=`Step ${i+1} of ${STEPS.length}`;
+ startMedia()}
+function stopMedia(){audio.pause();clearTimeout(endT);clearInterval(progT);$("#cap").classList.remove("speaking")}
+let doneFn=null;
+function startMedia(resume){const st=STEPS[cur];if(!resume)t0=performance.now();
+ doneFn=()=>{stopMedia();setProg(1);if(playing){if(cur<STEPS.length-1)endT=setTimeout(()=>go(cur+1),650);else{playing=false;syncPlay()}}};
+ progT=setInterval(()=>setProg(voice&&!audio.paused?audio.currentTime/st.dur:(performance.now()-t0)/1000/st.dur),200);
+ if(voice&&playing){if(!resume||!audio.src.endsWith(`audio/${st.id}.mp3`))audio.src=`audio/${st.id}.mp3`;audio.onended=doneFn;$("#cap").classList.add("speaking");audio.play().catch(()=>{$("#cap").classList.remove("speaking");endT=setTimeout(doneFn,Math.max(.5,st.dur-(resume?audio.currentTime:0))*1000)})}
+ else if(playing){endT=setTimeout(doneFn,Math.max(.5,st.dur-(performance.now()-t0)/1000)*1000)}}
+function setProg(p){$("#progAll").style.width=((cur+Math.min(1,Math.max(0,p)))/STEPS.length*100)+"%"}
+function syncPlay(){$("#bPlay").setAttribute("aria-label",playing?"Pause":"Play");$("#icPlay").innerHTML=playing?'<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>'}
+function togglePlay(){if(!started){playing=true;syncPlay();go(0);return}
+ playing=!playing;syncPlay();if(!playing){stopMedia();flush();pausedAt=performance.now()}else{if(cur>=STEPS.length-1&&audio.ended){go(0)}else if(voice&&audio.ended){go(cur+1)}else{t0+=performance.now()-pausedAt;startMedia(true)}}}
+let pausedAt=0;
+$("#bStart").onclick=()=>{playing=true;syncPlay();go(0)};
+$("#bSelf").onclick=()=>{playing=false;voice=false;syncVoice();syncPlay();go(1)};
+$("#bPlay").onclick=togglePlay;
+$("#bNext").onclick=()=>go(started?cur+1:0);$("#bPrev").onclick=()=>go(Math.max(0,cur-1));
+function syncVoice(){$("#bVoice").classList.toggle("off",!voice);$("#vw").style.display=voice?"":"none";$("#bVoice").setAttribute("aria-label",voice?"Voice on":"Voice off")}
+$("#bVoice").onclick=()=>{voice=!voice;syncVoice();if(!voice){audio.pause();$("#cap").classList.remove("speaking");if(playing){clearTimeout(endT);const left=Math.max(.5,STEPS[cur].dur-(performance.now()-t0)/1000);endT=setTimeout(()=>{if(playing)go(cur+1)},left*1000)}}else if(playing&&started)go(cur)};
+$("#bCap").onclick=()=>{caps=!caps;$("#cap").classList.toggle("hidecap",!caps);$("#bCap").classList.toggle("off",!caps)};
+$("#stepper").innerHTML=STAGES.map(s=>`<button class="stg" data-s="${s[0]}"><i></i><span>${s[1]}</span></button>`).join("");
+$$(".stg").forEach(b=>b.onclick=()=>go(STEPS.findIndex(s=>s.scene===b.dataset.s)));
+addEventListener("keydown",e=>{if(e.target.closest&&e.target.closest("input,textarea"))return;if(e.key==="ArrowRight"){e.preventDefault();$("#bNext").click()}else if(e.key==="ArrowLeft"){e.preventDefault();$("#bPrev").click()}else if(e.key===" "){e.preventDefault();togglePlay()}else if(e.key==="m"||e.key==="M")$("#bVoice").click();else if(e.key==="c"||e.key==="C")$("#bCap").click()});
+showScene("intro");syncVoice();
+STEPS.forEach(s=>{const a=new Audio();a.preload="auto";a.src=`audio/${s.id}.mp3`});
+}
+</script>
+</body>
+</html>
